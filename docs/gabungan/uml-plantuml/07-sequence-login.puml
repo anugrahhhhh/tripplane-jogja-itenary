@@ -1,0 +1,62 @@
+@startuml 07-sequence-login
+title Sequence Diagram - Masuk (Traveler vs Admin, pintu terpisah)
+
+skinparam sequence {
+  ArrowColor #2F6B5A
+  LifeLineBorderColor #2F6B5A
+  ParticipantBorderColor #2F6B5A
+  ParticipantBackgroundColor #FAF8F3
+  ActorBackgroundColor #E8D5DA
+}
+
+actor Traveler
+actor Admin
+participant "AuthenticatedSessionController\n(/login)" as TravelerCtrl
+participant "AdminAuthenticatedSessionController\n(/admin/login)" as AdminCtrl
+participant "LoginRequest" as Req
+participant "Auth (Guard: web)" as Auth
+database "MySQL\n(users)" as DB
+
+== Traveler login lewat /login ==
+Traveler -> TravelerCtrl : POST /login (email, password)
+TravelerCtrl -> Req : authenticate()
+Req -> Auth : attempt(credentials)
+Auth -> DB : SELECT * FROM users WHERE email = ?
+DB --> Auth : baris user
+Auth --> Req : true / false
+alt kredensial salah
+  Req --> TravelerCtrl : ValidationException
+  TravelerCtrl --> Traveler : 302 kembali + error
+else kredensial benar
+  TravelerCtrl -> TravelerCtrl : cek user->isAdmin()
+  alt user adalah admin
+    TravelerCtrl -> Auth : logout()
+    TravelerCtrl --> Traveler : redirect /login\n+ error "akun Admin"
+  else user adalah traveler
+    TravelerCtrl -> Auth : session()->regenerate()
+    TravelerCtrl --> Traveler : redirect Beranda
+  end
+end
+
+== Admin login lewat /admin/login ==
+Admin -> AdminCtrl : POST /admin/login (email, password)
+AdminCtrl -> Req : authenticate()
+Req -> Auth : attempt(credentials)
+Auth -> DB : SELECT * FROM users WHERE email = ?
+DB --> Auth : baris user
+Auth --> Req : true / false
+alt kredensial salah
+  Req --> AdminCtrl : ValidationException
+  AdminCtrl --> Admin : 302 kembali + error
+else kredensial benar
+  AdminCtrl -> AdminCtrl : cek user->isAdmin()
+  alt bukan admin
+    AdminCtrl -> Auth : logout()
+    AdminCtrl --> Admin : redirect /admin/login\n+ error "bukan akun Admin"
+  else admin sah
+    AdminCtrl -> Auth : session()->regenerate()
+    AdminCtrl --> Admin : redirect /admin (Dashboard)
+  end
+end
+
+@enduml

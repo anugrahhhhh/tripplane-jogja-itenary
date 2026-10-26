@@ -1,0 +1,48 @@
+@startuml 13-sequence-reminder
+title Sequence Diagram - Pengingat Itinerary Terjadwal (H-1)
+
+skinparam sequence {
+  ArrowColor #2F6B5A
+  LifeLineBorderColor #2F6B5A
+  ParticipantBorderColor #2F6B5A
+  ParticipantBackgroundColor #FAF8F3
+  ActorBackgroundColor #E8D5DA
+}
+
+participant "Scheduler\n(cron: schedule:run)" as Cron
+participant "SendItineraryReminders" as Cmd
+participant "Itinerary (Model)" as Itin
+database "MySQL" as DB
+participant "ItineraryReminderNotification" as Notif
+participant "User (Model)" as UserModel
+participant "Mail Driver\n(log, saat SMTP belum diisi)" as Mail
+
+Cron -> Cmd : handle()\n(dijadwalkan dailyAt('08:00'))
+Cmd -> Itin : whereDate(start_date, besok)\n->whereNull(reminder_sent_at)\n->with(user, collaborators)->get()
+Itin -> DB : SELECT ...
+DB --> Itin : daftar itinerary
+Itin --> Cmd : Collection<Itinerary>
+
+alt kosong
+  Cmd --> Cron : log "tidak ada itinerary besok"
+else ada itinerary
+  loop untuk setiap itinerary
+    Cmd -> Cmd : kumpulkan penerima\n(owner + collaborators, unique)
+    loop untuk setiap penerima
+      Cmd -> UserModel : notify(new ItineraryReminderNotification($itinerary))
+      UserModel -> Notif : via() => ['mail', 'database']
+      Notif -> Mail : kirim MailMessage\n(judul, tanggal, tombol "Lihat Itinerary")
+      Notif -> DB : INSERT INTO notifications\n(type, notifiable, data JSON)
+    end
+    Cmd -> Itin : forceFill(reminder_sent_at=now())->save()
+    Itin -> DB : UPDATE itineraries
+  end
+  Cmd --> Cron : log ringkasan jumlah terkirim
+end
+
+... nanti, di sisi traveler ...
+actor Traveler
+Traveler -> UserModel : buka Beranda / halaman apa pun
+UserModel --> Traveler : badge lonceng menampilkan\njumlah notifikasi belum dibaca
+
+@enduml

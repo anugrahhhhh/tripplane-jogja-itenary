@@ -1,0 +1,39 @@
+@startuml 12-sequence-cuaca
+title Sequence Diagram - Prakiraan Cuaca pada Halaman Itinerary
+
+skinparam sequence {
+  ArrowColor #2F6B5A
+  LifeLineBorderColor #2F6B5A
+  ParticipantBorderColor #2F6B5A
+  ParticipantBackgroundColor #FAF8F3
+  ActorBackgroundColor #E8D5DA
+}
+
+actor Traveler
+participant "ItineraryController" as Ctrl
+participant "WeatherService" as Weather
+participant "Cache\n(database cache store)" as Cache
+participant "Open-Meteo API" as Meteo
+
+Traveler -> Ctrl : GET /itinerary/{id}
+Ctrl -> Weather : forecastForDateRange(\nlat kota Yogyakarta, lng,\nstart_date, end_date)
+Weather -> Cache : remember(cacheKey, 45 menit)
+alt data sudah ada di cache
+  Cache --> Weather : hasil cache tersimpan
+else belum ada / kedaluwarsa
+  Weather -> Meteo : GET /v1/forecast\n(latitude, longitude, daily=weather_code,\ntemperature_2m_max/min, precipitation_probability_max)
+  alt request gagal / error jaringan
+    Meteo --> Weather : error / timeout
+    Weather --> Ctrl : [] (array kosong)
+  else 200 OK
+    Meteo --> Weather : JSON daily forecast
+    Weather -> Weather : petakan weather_code\n-> label Indonesia + ikon emoji
+    Weather -> Cache : simpan hasil 45 menit
+    Weather --> Ctrl : map tanggal -> {label, icon,\ntemp_min, temp_max, precipitation}
+  end
+end
+
+Ctrl -> Ctrl : buildWeatherByDay()\n(cocokkan tanggal per day_number)
+Ctrl --> Traveler : render halaman Itinerary\n+ badge cuaca per hari\n(atau tanpa badge jika data kosong)
+
+@enduml

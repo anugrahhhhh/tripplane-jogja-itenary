@@ -1,0 +1,53 @@
+@startuml 11-sequence-kolaborasi
+title Sequence Diagram - Undang Kolaborator Itinerary
+
+skinparam sequence {
+  ArrowColor #2F6B5A
+  LifeLineBorderColor #2F6B5A
+  ParticipantBorderColor #2F6B5A
+  ParticipantBackgroundColor #FAF8F3
+  ActorBackgroundColor #E8D5DA
+}
+
+actor "Pemilik Itinerary" as Owner
+participant "ItineraryCollaboratorController" as Ctrl
+participant "Itinerary (Model)" as Itin
+participant "User (Model)" as UserModel
+database "MySQL\n(users, itinerary_collaborators)" as DB
+actor "Traveler Diundang" as Friend
+
+Owner -> Ctrl : POST /itinerary/{id}/kolaborator\n(email)
+Ctrl -> Itin : isOwnedBy(auth()->user())
+alt bukan pemilik
+  Ctrl --> Owner : 403 Forbidden
+else pemilik sah
+  Ctrl -> UserModel : where(email)->first()
+  UserModel -> DB : SELECT * FROM users WHERE email = ?
+  DB --> UserModel : baris user / kosong
+
+  alt user tidak ditemukan
+    Ctrl --> Owner : ValidationException\n"Belum ada akun terdaftar"
+  else email = email pemilik sendiri
+    Ctrl --> Owner : ValidationException\n"Ini email kamu sendiri"
+  else user->isAdmin()
+    Ctrl --> Owner : ValidationException\n"Admin tidak bisa diundang"
+  else
+    Ctrl -> Itin : collaborators->contains(user.id)
+    alt sudah jadi kolaborator
+      Ctrl --> Owner : ValidationException\n"Sudah jadi kolaborator"
+    else belum
+      Ctrl -> Itin : collaborators()->attach(user.id)
+      Itin -> DB : INSERT INTO itinerary_collaborators
+      Ctrl --> Owner : redirect kembali\n+ status "<nama> diundang"
+    end
+  end
+end
+
+... kunjungan berikutnya oleh traveler yang diundang ...
+Friend -> Ctrl : GET /itinerary/{id}
+Ctrl -> Itin : isAccessibleBy(auth()->user())
+Itin -> Itin : isOwnedBy() OR\ncollaborators->contains(id)
+Itin --> Ctrl : true
+Ctrl --> Friend : 200 tampilkan itinerary\n(bisa tambah/ubah destinasi,\ntidak bisa edit judul/hapus)
+
+@enduml

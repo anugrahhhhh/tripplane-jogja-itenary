@@ -1,0 +1,48 @@
+@startuml 10-sequence-rekomendasi-ai
+title Sequence Diagram - Rekomendasi AI (Destinasi Personalisasi)
+
+skinparam sequence {
+  ArrowColor #2F6B5A
+  LifeLineBorderColor #2F6B5A
+  ParticipantBorderColor #2F6B5A
+  ParticipantBackgroundColor #FAF8F3
+  ActorBackgroundColor #E8D5DA
+}
+
+actor Guest as User
+participant "RecommendationController" as Ctrl
+participant "RateLimiter" as RL
+participant "LlmRecommendationService" as Service
+participant "Gemini API" as Gemini
+participant "Destination (Model)" as Dest
+
+User -> Ctrl : POST /rekomendasi-ai\n(minat, catatan, budget, durasi, lokasi opsional)
+Ctrl -> RL : tooManyAttempts(ip, 5)
+alt terlampaui
+  Ctrl --> User : 302 kembali + error\n"Terlalu banyak percobaan"
+else belum
+  Ctrl -> RL : hit(ip, 60)
+  Ctrl -> Service : recommend(preferensi)
+  Service -> Dest : where(is_active)->with(category)->get()
+  Dest --> Service : Collection<Destination>
+  Service -> Service : buildDestinationCatalog()\n(+ jarak Haversine jika lokasi ada)
+  Service -> Service : buildPrompt()
+  Service -> Gemini : POST generateContent\n(responseSchema: recommendations[])
+  Gemini --> Service : 200 OK JSON
+
+  alt gagal setelah retry
+    Service --> Ctrl : throw RuntimeException
+    Ctrl --> User : 302 kembali + error
+  else sukses
+    Service -> Service : petakan destination_id\n-> Destination asli + alasan
+    Service --> Ctrl : array [{destination, reason}]
+    Ctrl --> User : tampilkan 6 rekomendasi\n+ alasan personalisasi
+
+    opt User login & pilih beberapa destinasi
+      User -> Ctrl : POST /itinerary-hari-ini\n(destination_ids[], lat, lng)
+      note right : ditangani TodayItineraryController,\nurutkan berdasarkan jarak dari lokasi
+    end
+  end
+end
+
+@enduml

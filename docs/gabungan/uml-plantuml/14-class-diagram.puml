@@ -1,0 +1,222 @@
+@startuml 14-class-diagram
+title JogjaTrip - Class Diagram (Domain Model, Services, Notifications)
+
+skinparam class {
+  BackgroundColor #FAF8F3
+  BorderColor #2F6B5A
+  ArrowColor #2F6B5A
+  HeaderBackgroundColor #E8D5DA
+}
+hide circle
+skinparam linetype ortho
+
+package "Models" {
+  class User {
+    +id: int
+    +name: string
+    +email: string
+    -password: string
+    +role: enum(admin, traveler)
+    +avatar: string
+    +google_id: string
+    +email_verified_at: datetime
+    --
+    +isAdmin(): bool
+    +favorites(): HasMany<Favorite>
+    +reviews(): HasMany<Review>
+    +itineraries(): HasMany<Itinerary>
+    +collaboratingItineraries(): BelongsToMany<Itinerary>
+  }
+
+  class Category {
+    +id: int
+    +name: string
+    +slug: string
+    +icon: string
+    --
+    +destinations(): HasMany<Destination>
+  }
+
+  class Destination {
+    +id: int
+    +category_id: int
+    +name: string
+    +slug: string
+    +description: text
+    +recommendation_reason: text
+    +address: string
+    +latitude: float
+    +longitude: float
+    +price_min: int
+    +price_max: int
+    +open_time: time
+    +close_time: time
+    +cover_photo: string
+    +is_active: bool
+    --
+    +category(): BelongsTo<Category>
+    +photos(): HasMany<DestinationPhoto>
+    +favorites(): HasMany<Favorite>
+    +reviews(): HasMany<Review>
+    +visibleReviews(): HasMany<Review>
+    +itineraryItems(): HasMany<ItineraryItem>
+    +averageRating(): float
+    +reviewsCount(): int
+    +isFavoritedBy(user): bool
+    +isOpenNow(): bool
+  }
+
+  class DestinationPhoto {
+    +id: int
+    +destination_id: int
+    +path: string
+    --
+    +destination(): BelongsTo<Destination>
+  }
+
+  class Favorite {
+    +id: int
+    +user_id: int
+    +destination_id: int
+    --
+    +user(): BelongsTo<User>
+    +destination(): BelongsTo<Destination>
+  }
+
+  class Review {
+    +id: int
+    +user_id: int
+    +destination_id: int
+    +rating: tinyint(1-5)
+    +comment: text
+    +is_visible: bool
+    --
+    +user(): BelongsTo<User>
+    +destination(): BelongsTo<Destination>
+  }
+
+  class Itinerary {
+    +id: int
+    +user_id: int
+    +title: string
+    +start_date: date
+    +end_date: date
+    +type: enum(planned, today)
+    +reminder_sent_at: datetime
+    --
+    +user(): BelongsTo<User>
+    +items(): HasMany<ItineraryItem>
+    +collaborators(): BelongsToMany<User>
+    +totalDays(): int
+    +itemsByDay(): Collection
+    +isActive(): bool
+    +plannedProgress(): int
+    +emoji(): string
+    +isOwnedBy(user): bool
+    +isAccessibleBy(user): bool
+  }
+
+  class ItineraryItem {
+    +id: int
+    +itinerary_id: int
+    +destination_id: int
+    +day_number: int
+    +start_time: time
+    +duration_minutes: int
+    +sort_order: int
+    +notes: string
+    --
+    +itinerary(): BelongsTo<Itinerary>
+    +destination(): BelongsTo<Destination>
+    +endTime(): Carbon
+  }
+}
+
+package "Services" {
+  class DistanceService <<static>> {
+    +{static} haversineKm(lat1, lng1, lat2, lng2): float
+    +{static} estimateDurationMinutes(distanceKm, avgSpeed=30): int
+  }
+
+  class OperatingHoursService <<static>> {
+    +{static} isOpenAt(openTime, closeTime, moment): bool
+    +{static} isWithinWindow(openTime, closeTime, startMin, endMin): bool
+  }
+
+  class ScheduleValidator <<static>> {
+    +{static} validateDay(dayItems): array
+    +{static} isWithinOperatingHours(item): bool
+  }
+
+  class NearestNeighborSorter <<static>> {
+    +{static} sort(items, startLat=null, startLng=null): Collection
+  }
+
+  class WeatherService {
+    +forecastForDateRange(lat, lng, startDate, endDate): array
+  }
+
+  class LlmRecommendationService {
+    +recommend(preferences): array
+    -buildPrompt(preferences, catalog): string
+    -mapToDestinations(recommendations, destinations): array
+  }
+
+  class AiItineraryPlannerService {
+    +plan(preferences): array
+    -buildPrompt(preferences, catalog): string
+    -responseSchema(): array
+    -mapToDestinations(days, destinations, totalDays): array
+  }
+
+  interface CallsGeminiApi <<trait>> {
+    #requestGeminiJson(prompt, responseSchema): array
+    -extractJson(text): string
+  }
+
+  interface BuildsDestinationCatalog <<trait>> {
+    #buildDestinationCatalog(destinations, lat, lng): Collection
+  }
+}
+
+package "Notifications" {
+  class ItineraryReminderNotification {
+    -itinerary: Itinerary
+    --
+    +via(notifiable): array
+    +toMail(notifiable): MailMessage
+    +toArray(notifiable): array
+  }
+}
+
+' ===== Relasi antar model =====
+Category "1" -- "many" Destination : memiliki >
+Destination "1" -- "many" DestinationPhoto : galeri >
+Destination "1" -- "many" ItineraryItem : dijadwalkan di >
+
+User "1" -- "many" Favorite
+Favorite "many" -- "1" Destination
+User "1" -- "many" Review
+Review "many" -- "1" Destination
+
+User "1" -- "many" Itinerary : memiliki (owner) >
+Itinerary "many" -- "many" User : kolaborator\n(itinerary_collaborators) >
+Itinerary "1" *-- "many" ItineraryItem : terdiri dari
+
+' ===== Service menggunakan model =====
+ItineraryItem <.. ScheduleValidator : memvalidasi
+ItineraryItem <.. NearestNeighborSorter : mengurutkan
+Destination <.. DistanceService : hitung jarak
+Destination <.. LlmRecommendationService : katalog rekomendasi
+Destination <.. AiItineraryPlannerService : katalog itinerary
+Itinerary <.. ItineraryReminderNotification : dikirim untuk
+
+LlmRecommendationService ..|> CallsGeminiApi : use
+LlmRecommendationService ..|> BuildsDestinationCatalog : use
+AiItineraryPlannerService ..|> CallsGeminiApi : use
+AiItineraryPlannerService ..|> BuildsDestinationCatalog : use
+NearestNeighborSorter ..> DistanceService : memakai
+ScheduleValidator ..> OperatingHoursService : memakai
+Destination ..> OperatingHoursService : isOpenNow()
+
+@enduml

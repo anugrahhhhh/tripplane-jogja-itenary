@@ -1,0 +1,32 @@
+{
+    "name": "JogjaTrip — Trip Planner Yogyakarta",
+    "short_name": "JogjaTrip",
+    "description": "Rencanakan perjalananmu di Kota Yogyakarta: temukan destinasi, susun itinerary, dan simpan rencana perjalanan untuk diakses kapan saja.",
+    "start_url": "/",
+    "id": "/",
+    "display": "standalone",
+    "background_color": "#FAF8F3",
+    "theme_color": "#2F6B5A",
+    "orientation": "portrait-primary",
+    "lang": "id",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icons/icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

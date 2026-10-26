@@ -1,0 +1,14 @@
+<?php
+
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
+
+Artisan::command('inspire', function () {
+    $this->comment(Inspiring::quote());
+})->purpose('Display an inspiring quote');
+
+// Pengingat H-1 itinerary, dijalankan tiap pagi. Perlu cron/Task Scheduler
+// yang memanggil `php artisan schedule:run` setiap menit di server produksi
+// agar jadwal ini benar-benar aktif (tidak berjalan otomatis di dev lokal).
+Schedule::command('app:send-itinerary-reminders')->dailyAt('08:00');
